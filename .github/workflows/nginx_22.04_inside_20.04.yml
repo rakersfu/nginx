@@ -2,8 +2,8 @@ name: nginx_22.04_inside_20.04
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
+  #push:                       #取消注释每次修改代码后会自动运行
+    #branches: [ main ]
 
 jobs:
   build-nginx:
