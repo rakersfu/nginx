@@ -12,7 +12,7 @@
 | **构建环境** | Docker 容器（Ubuntu 20.04） | 本地主机（Ubuntu 22.04） |
 | **OpenSSL** | 系统自带版本 | 静态编译 OpenSSL 3.0.12 |
 | **Runner** | ubuntu-22.04 | ubuntu-22.04 |
-| **Release 标签** | nginx-1.25.3 | nginx-1.25.3 |
+| **Release 标签** | nginx-1.25.3-inside-20.04 | nginx-1.25.3 |
 
 ---
 
