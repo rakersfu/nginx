@@ -1,0 +1,61 @@
+name: nginx_22.04_static_openssl
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-nginx:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev wget
+
+    - name: nginx_22.04_static_openssl
+      run: |
+        wget https://www.openssl.org/source/openssl-3.0.12.tar.gz -O openssl.tar.gz
+        tar -zxvf openssl.tar.gz
+        mv openssl-3.0.12 openssl-src
+        cd openssl-src
+        ./config no-shared
+        make -j$(nproc)
+
+    - name: Download Nginx source
+      run: |
+        wget http://nginx.org/download/nginx-1.25.3.tar.gz -O nginx.tar.gz
+        tar -zxvf nginx.tar.gz
+
+    - name: Configure and build Nginx (with static OpenSSL)
+      working-directory: ./nginx-1.25.3
+      run: |
+        ./configure --prefix=/opt/nginx \
+          --with-http_ssl_module \
+          --with-http_v2_module \
+          --with-http_gzip_static_module \
+          --with-pcre \
+          --with-openssl=../openssl-src \
+          --with-openssl-opt=no-shared
+        make -j$(nproc)
+
+    - name: Package build output
+      run: |
+        mkdir -p output
+        cp -r nginx-1.25.3/objs output/nginx
+        tar -czvf nginx-build.tar.gz output
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: nginx-1.25.3
+        name: "nginx_22.04_static_openssl"
+        body: "Auto-built Nginx from source with statically linked OpenSSL 3.0.12, HTTP/2, Gzip, and PCRE support."
+        files: nginx-build.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
