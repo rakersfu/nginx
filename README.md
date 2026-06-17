@@ -20,7 +20,7 @@
 
 ### 基础配置
 - **Nginx 版本**：1.25.3
-- **触发方式**：`workflow_dispatch`（手���触发）+ `push` 到 main 分支
+- **触发方式**：`workflow_dispatch`（手动触发）+ `push` 到 main 分支(已注释掉)
 - **编译选项**：
   - `--with-http_ssl_module` - SSL/TLS 支持
   - `--with-http_v2_module` - HTTP/2 支持
