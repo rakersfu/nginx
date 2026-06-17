@@ -1,0 +1,56 @@
+name: nginx_22.04_inside_20.04
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-nginx:
+    runs-on: ubuntu-22.04  # 使用稳定 runner，但内部用 20.04 容器构建
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Verify Docker availability
+      run: docker --version
+
+    - name: nginx_22.04_inside_20.04
+      run: |
+        docker run --rm -v $PWD:/build -w /build ubuntu:20.04 bash -c "
+          apt update &&
+          DEBIAN_FRONTEND=noninteractive apt install -y \
+            build-essential \
+            libpcre3 libpcre3-dev \
+            zlib1g zlib1g-dev \
+            libssl-dev wget &&
+          wget http://nginx.org/download/nginx-1.25.3.tar.gz -O nginx.tar.gz &&
+          tar -zxvf nginx.tar.gz &&
+          cd nginx-1.25.3 &&
+          ./configure --prefix=/opt/nginx \
+            --with-http_ssl_module \
+            --with-http_v2_module \
+            --with-http_gzip_static_module \
+            --with-pcre &&
+          make -j\$(nproc) &&
+          mkdir -p /build/output &&
+          cp -r objs /build/output/nginx
+        "
+
+    - name: Package build output
+      run: |
+        tar -czvf nginx-build.tar.gz output
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: nginx-1.25.3
+        name: "nginx_22.04_inside_20.04"
+        body: |
+          ✅ Built inside Ubuntu 20.04 container to ensure glibc compatibility  
+          ✅ Includes SSL, HTTP/2, Gzip, and PCRE  
+          ✅ Compatible with QNAP, Ubuntu 20.04, Debian 10/11, and other legacy systems
+        files: nginx-build.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
