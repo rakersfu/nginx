@@ -45,7 +45,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: nginx-1.25.3
+        tag_name: nginx-1.25.3-inside-20.04
         name: "nginx_22.04_inside_20.04"
         body: |
           ✅ Built inside Ubuntu 20.04 container to ensure glibc compatibility  
