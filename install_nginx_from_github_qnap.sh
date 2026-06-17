@@ -7,7 +7,7 @@ CONF_DIR=$INSTALL_DIR/conf
 LOG_DIR=$INSTALL_DIR/logs
 SSL_DIR=$INSTALL_DIR/ssl
 HTML_DIR=$INSTALL_DIR/html
-RELEASE_URL=https://github.com/xiongli870110-hue/nginx_build_auto/releases/download/nginx-1.25.3-qnap/nginx-build.tar.gz
+RELEASE_URL=https://github.com/rakersfu/nginx/releases/download/nginx-1.25.3-qnap/nginx-build.tar.gz
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 RELEASE_TMP=$SCRIPT_DIR/nginx-build.tar.gz
