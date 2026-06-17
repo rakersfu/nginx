@@ -1,0 +1,64 @@
+name: nginx_22.04_inside_16.04_qnap
+
+on:
+  workflow_dispatch:
+  #push:
+    #branches: [ main ]
+
+jobs:
+  build-nginx:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: nginx_22.04_inside_16.04_qnap (glibc 2.23)
+      run: |
+        docker run --rm -v $PWD:/build -w /build ubuntu:16.04 bash -c "
+          set -e
+          apt update &&
+          DEBIAN_FRONTEND=noninteractive apt install -y \
+            build-essential \
+            libpcre3 libpcre3-dev \
+            zlib1g zlib1g-dev \
+            libssl-dev wget curl ca-certificates &&
+          
+          curl -LO https://www.openssl.org/source/openssl-1.1.1u.tar.gz &&
+          tar -zxvf openssl-1.1.1u.tar.gz &&
+          
+          curl -LO http://nginx.org/download/nginx-1.25.3.tar.gz &&
+          tar -zxvf nginx-1.25.3.tar.gz &&
+          
+          cd nginx-1.25.3 &&
+          ./configure --prefix=/opt/nginx \
+            --with-http_ssl_module \
+            --with-http_v2_module \
+            --with-http_gzip_static_module \
+            --with-pcre \
+            --with-openssl=../openssl-1.1.1u \
+            --with-openssl-opt=no-shared &&
+          make -j\$(nproc) &&
+          make install &&
+          
+          mkdir -p /build/output &&
+          cp -r /opt/nginx /build/output/nginx
+        "
+
+    - name: Package build output
+      run: |
+        tar -czvf nginx-build.tar.gz output
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: nginx-1.25.3-qnap
+        name: "nginx_22.04_inside_16.04_qnap"
+        body: |
+          ✅ Built inside Ubuntu 16.04 container (glibc 2.23)  
+          ✅ Statically linked with OpenSSL 1.1.1u  
+          ✅ Compatible with QNAP NAS, Debian 8/9, Ubuntu 16.04+, and other legacy systems  
+          ✅ No runtime dependency on libssl.so.1.1 or glibc ≥ 2.25
+        files: nginx-build.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
