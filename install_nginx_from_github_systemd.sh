@@ -2,6 +2,12 @@
 
 set -e
 
+# check run as root
+if [ "$EUID" -ne 0 ]; then 
+   echo "[Error] This script must be run as root ❌"
+   exit 1
+fi
+
 INSTALL_DIR=/opt/nginx
 CONF_DIR=$INSTALL_DIR/conf
 LOG_DIR=$INSTALL_DIR/logs
@@ -53,16 +59,40 @@ if [ -z "$FOUND_NGINX" ]; then
 fi
 
 FOUND_DIR=$(dirname "$FOUND_NGINX")
-echo "[nginx-install] Main binary located at: $FOUND_DIR"
+echo "[nginx-install] Main binary located at: $FOUND_NGINX"
 
 echo "[nginx-install] Installing to $INSTALL_DIR..."
 rm -rf "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
-cp -r "$FOUND_DIR/.."/* "$INSTALL_DIR/"
+
+# Copy the directory that contains the nginx binary into the install dir.
+# This handles archives that put the binary at top-level of some folder (e.g. output/nginx/nginx)
+# or those that already have a sbin/ layout.
+cp -r "$FOUND_DIR"/* "$INSTALL_DIR"/ || true
+
+# If the binary ended up at $INSTALL_DIR/nginx (top-level), move it to sbin so later checks work
+if [ -f "$INSTALL_DIR/nginx" ] && [ ! -f "$INSTALL_DIR/sbin/nginx" ]; then
+  mkdir -p "$INSTALL_DIR/sbin"
+  mv "$INSTALL_DIR/nginx" "$INSTALL_DIR/sbin/nginx"
+  chmod 0755 "$INSTALL_DIR/sbin/nginx"
+fi
+
+# If binary is in a different path inside the install dir (e.g. bin/nginx), try to normalize to sbin/
+if [ ! -f "$INSTALL_DIR/sbin/nginx" ]; then
+  # search for nginx within the newly populated $INSTALL_DIR
+  INSTALLED_NGINX=$(find "$INSTALL_DIR" -type f -name nginx -executable | head -n 1 || true)
+  if [ -n "$INSTALLED_NGINX" ]; then
+    mkdir -p "$INSTALL_DIR/sbin"
+    cp -f "$INSTALLED_NGINX" "$INSTALL_DIR/sbin/nginx"
+    chmod 0755 "$INSTALL_DIR/sbin/nginx"
+  fi
+fi
 
 # Verify nginx binary exists after installation
 if [ ! -f "$INSTALL_DIR/sbin/nginx" ]; then
   echo "[Error] nginx binary missing after installation, failed ❌"
+  echo "[nginx-install] Debug: contents of $INSTALL_DIR:" 
+  ls -al "$INSTALL_DIR" || true
   exit 1
 fi
 
@@ -83,7 +113,7 @@ for U in guest admin ubuntu; do
     break
   fi
 done
-NGINX_USER=${NGINX_USER:-admin}
+NGINX_USER=${NGINX_USER:-www-data}
 
 echo "[nginx-install] Creating default nginx.conf..."
 cat > "$CONF_DIR/nginx.conf" <<EOF
@@ -138,21 +168,21 @@ echo "[nginx-install] Validating configuration..."
 # Add systemd auto-start logic
 # -------------------------------
 echo "[nginx-install] Creating systemd service for auto-start..."
-cat > "$SERVICE_FILE" <<EOF
+cat > "$SERVICE_FILE" <<'EOFSERVICE'
 [Unit]
 Description=Nginx Web Server
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=$SYMLINK -c $CONF_DIR/nginx.conf -p $INSTALL_DIR -g "daemon off;"
-ExecReload=$SYMLINK -s reload -p $INSTALL_DIR
-ExecStop=$SYMLINK -s quit -p $INSTALL_DIR
+ExecStart=/usr/local/bin/nginx -c /opt/nginx/conf/nginx.conf -p /opt/nginx -g "daemon off;"
+ExecReload=/usr/local/bin/nginx -s reload -p /opt/nginx
+ExecStop=/usr/local/bin/nginx -s quit -p /opt/nginx
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOFSERVICE
 
 echo "[nginx-install] Reloading systemd daemon..."
 systemctl daemon-reload
@@ -162,5 +192,13 @@ systemctl enable nginx
 
 echo "[nginx-install] Starting nginx service via systemd..."
 systemctl start nginx
+
+echo "[nginx-install] Verifying nginx is running..."
+if systemctl is-active --quiet nginx; then
+  echo "[nginx-install] ✅ Nginx is running successfully"
+else
+  echo "[nginx-install] ⚠️ Warning: Nginx service may not have started correctly"
+  systemctl status nginx || true
+fi
 
 echo "[nginx-install] Installation and auto-start setup completed ✅"
