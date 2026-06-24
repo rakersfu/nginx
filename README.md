@@ -1,227 +1,250 @@
-# Nginx 构建工作流对比
+# Nginx 安装和配置指南
 
-本仓库包含三个 Nginx 构建工作流，针对不同的系统环境进行优化。本文档详细说明三个工作流的差异、共同特点以及使用场景。因为使用威联通老系统的人很少，就不再单挑出来比较了，有需要的朋友自取。
+本目录包含用于安装和配置 Nginx 的自动化脚本。
 
----
+## 📋 文件说明
 
-## 📋 工作流概览
+- **install_nginx_from_github_systemd.sh** - 完整的 Nginx 安装脚本，包含 systemd 自启配置
 
-| 特性 | nginx_22.04_inside_20.04 | nginx_22.04_static_openssl |
-|------|-------------------------|--------------------------|
-| **目标系统** | QNAP、Ubuntu 20.04、Debian 10/11（老旧系统） | Ubuntu 22.04 及以上（现代系统） |
-| **构建环境** | Docker 容器（Ubuntu 20.04） | 本地主机（Ubuntu 22.04） |
-| **OpenSSL** | 系统自带版本 | 静态编译 OpenSSL 3.0.12 |
-| **Runner** | ubuntu-22.04 | ubuntu-22.04 |
-| **Release 标签** | nginx-1.25.3-inside-20.04 | nginx-1.25.3 |
+## 🚀 快速开始
 
----
+### 前置要求
 
-## 🔄 共同特点
+- Linux 系统（Ubuntu、CentOS、Debian 等）
+- Root 权限或 sudo 权限
+- wget 工具（用于下载预编译的 Nginx 包）
 
-### 基础配置
-- **Nginx 版本**：1.25.3
-- **触发方式**：`workflow_dispatch`（手动触发）+ `push` 到 main 分支(已注释掉)
-- **编译选项**：
-  - `--with-http_ssl_module` - SSL/TLS 支持
-  - `--with-http_v2_module` - HTTP/2 支持
-  - `--with-http_gzip_static_module` - Gzip 压缩支持
-  - `--with-pcre` - Perl 正则表达式引擎支持
-- **并行编译**：使用 `make -j$(nproc)` 充分利用多核处理器
-- **输出打包**：将编译产物打包为 `nginx-build.tar.gz`
-- **发布方式**：GitHub Release（使用 `softprops/action-gh-release@v1`）
-- **认证令牌**：均使用 `GITHUB_TOKEN` 环境变量
+### 安装步骤
 
----
+1. **下载脚本**
+   ```bash
+   wget https://raw.githubusercontent.com/xiongli870110-hue/ttyd/main/nginx/install_nginx_from_github_systemd.sh
+   chmod +x install_nginx_from_github_systemd.sh
+   ```
 
-## 🎯 关键差异
+2. **运行安装**
+   ```bash
+   sudo ./install_nginx_from_github_systemd.sh
+   ```
 
-### 1. **nginx_22.04_inside_20.04** (老旧系统优化版)
-   
-**核心策略**：容器化隔离，确保 glibc 兼容性
+   或直接以 root 身份运行：
+   ```bash
+   sudo su -
+   ./install_nginx_from_github_systemd.sh
+   ```
 
-```
-Ubuntu 22.04 主机
-    ↓
-Docker 容器 (Ubuntu 20.04)
-    ↓
-安装依赖 & 编译 Nginx
-    ↓
-输出二进制文件
-```
+3. **验证安装**
+   ```bash
+   systemctl status nginx
+   curl http://localhost
+   ```
 
-**优势**：
-- ✅ 确保编译环境 glibc 版本与目标系统兼容
-- ✅ 避免宿主机库版本过新导致的兼容性问题
-- ✅ 对 QNAP NAS、Ubuntu 20.04、Debian 10/11 等老旧系统友好
-- ✅ 隔离构建环境，不污染宿主机
+## 📁 安装目录结构
 
-**劣势**：
-- ⚠️ Docker 镜像拉取时间
-- ⚠️ 容器启动和销毁的额外开销
-
-**适用场景**：
-- QNAP、群晖等老旧 NAS 系统
-- Ubuntu 18.04/20.04、Debian 10/11 等
-- 对兼容性有严格要求的生产环境
-
----
-
-### 2. **nginx_22.04_static_openssl** (现代系统优化版)
-
-**核心策略**：静态编译 OpenSSL，最大化安全性和独立性
+安装完成后，Nginx 会被安装到以下位置：
 
 ```
-Ubuntu 22.04 主机
-    ↓
-编译 OpenSSL 3.0.12 (静态库)
-    ↓
-编译 Nginx (链接静态 OpenSSL)
-    ↓
-输出二进制文件
+/opt/nginx/
+├── sbin/
+│   └── nginx              # Nginx 可执行文件
+├── conf/
+│   ├── nginx.conf         # 主配置文件
+│   └── mime.types         # MIME 类型定义
+├── logs/
+│   ├── access.log         # 访问日志
+│   └── error.log          # 错误日志
+├── html/
+│   └── index.html         # 默认首页
+└── ssl/                   # SSL 证书目录（预留）
 ```
 
-**优势**：
-- ✅ 使用最新的 OpenSSL 3.0.12（更新的安全补丁）
-- ✅ 静态链接 OpenSSL，无需依赖系统 libssl
-- ✅ 更好的安全性和更新的加密算法支持
-- ✅ 编译速度更快（无容器开销）
-- ✅ 适合现代云环境和容器化部署
-
-**劣势**：
-- ⚠️ 编译产物体积更大（静态链接）
-- ⚠️ 对老旧系统的 glibc 兼容性可能有问题
-
-**适用场景**：
-- Ubuntu 22.04 及更新版本
-- 现代 Linux 发行版（CentOS 8+、AlmaLinux、Rocky Linux）
-- Kubernetes、Docker 等容器环境
-- 对安全性要求高的应用
-
----
-
-## 📊 编译依赖对比
-
-### nginx_22.04_inside_20.04
-```bash
-安装依赖：build-essential
-         libpcre3 libpcre3-dev
-         zlib1g zlib1g-dev
-         libssl-dev
-         wget
+**快捷方式：**
+```
+/usr/local/bin/nginx → /opt/nginx/sbin/nginx
 ```
 
-### nginx_22.04_static_openssl
-```bash
-安装依赖：build-essential
-         libpcre3 libpcre3-dev
-         zlib1g zlib1g-dev
-         wget
-         
-# OpenSSL 单独编译（不依赖系统 libssl-dev）
-openssl-3.0.12 (从源码编译)
-```
+## ⚙️ 常用命令
 
----
-
-## 🚀 使用指南
-
-### 选择构建版本
-
-**选择 `nginx_22.04_inside_20.04` 如果：**
-- 需要在 QNAP、群晖 等 NAS 设备上运行
-- 部署环境是 Ubuntu 20.04 或 Debian 10/11
-- 对系统兼容性的要求优先于安全性更新
-- 系统的 glibc 版本较低（< 2.31）
-
-**选择 `nginx_22.04_static_openssl` 如果：**
-- 部署在 Ubuntu 22.04 LTS 或更新版本
-- 使用现代 Linux 发行版（Rocky、AlmaLinux 等）
-- 在容器/Kubernetes 环境中运行
-- 对加密算法和 TLS 协议版本有更新的需求
-- 希望减少系统依赖的复杂性
-
----
-
-## 📦 Release 产物
-
-两个工作流均生成以下发布物：
-
-```
-Release: nginx-1.25.3
-├── Tag: nginx-1.25.3
-├── Release Notes: 说明构建策略和功能特性
-└── Artifact: nginx-build.tar.gz
-    └── output/nginx/  (二进制和配置文件)
-```
-
-### 解压和使用
+### 服务管理
 
 ```bash
-# 下载 Release
-tar -xzvf nginx-build.tar.gz
+# 启动 Nginx
+sudo systemctl start nginx
 
-# 二进制位置
-./output/nginx/objs/nginx
+# 停止 Nginx
+sudo systemctl stop nginx
 
-# 可选：安装到系统
-sudo mkdir -p /opt/nginx
-sudo cp -r output/nginx/* /opt/nginx/
+# 重启 Nginx
+sudo systemctl restart nginx
+
+# 重新加载配置（不中断服务）
+sudo systemctl reload nginx
+
+# 查看服务状态
+sudo systemctl status nginx
+
+# 启用开机自启
+sudo systemctl enable nginx
+
+# 禁用开机自启
+sudo systemctl disable nginx
 ```
 
+### 快速操作
+
+```bash
+# 测试配置文件语法
+/usr/local/bin/nginx -t
+
+# 查看 Nginx 版本
+/usr/local/bin/nginx -v
+
+# 查看编译参数
+/usr/local/bin/nginx -V
+
+# 检查 Nginx 进程
+ps aux | grep nginx
+
+# 检查端口占用
+netstat -tlnp | grep 80
+# 或
+ss -tlnp | grep 80
+```
+
+## 🔧 配置文件修改
+
+编辑 Nginx 配置文件：
+
+```bash
+sudo nano /opt/nginx/conf/nginx.conf
+# 或
+sudo vim /opt/nginx/conf/nginx.conf
+```
+
+修改后验证配置并重新加载：
+
+```bash
+# 验证配置语法
+/usr/local/bin/nginx -t -c /opt/nginx/conf/nginx.conf -p /opt/nginx
+
+# 重新加载配置
+sudo systemctl reload nginx
+```
+
+## 📊 查看日志
+
+```bash
+# 查看访问日志
+tail -f /opt/nginx/logs/access.log
+
+# 查看错误日志
+tail -f /opt/nginx/logs/error.log
+
+# 查看最后 100 行
+tail -n 100 /opt/nginx/logs/access.log
+```
+
+## 🗑️ 卸载
+
+完全卸载 Nginx：
+
+```bash
+# 停止服务
+sudo systemctl stop nginx
+
+# 禁用自启
+sudo systemctl disable nginx
+
+# 删除服务文件
+sudo rm /etc/systemd/system/nginx.service
+
+# 重新加载 systemd
+sudo systemctl daemon-reload
+
+# 删除安装目录
+sudo rm -rf /opt/nginx
+
+# 删除软链接
+sudo rm /usr/local/bin/nginx
+```
+
+## 🐛 故障排查
+
+### 服务无法启动
+
+1. **检查配置文件语法**
+   ```bash
+   /usr/local/bin/nginx -t
+   ```
+
+2. **查看错误日志**
+   ```bash
+   tail -f /opt/nginx/logs/error.log
+   ```
+
+3. **检查端口是否被占用**
+   ```bash
+   netstat -tlnp | grep 80
+   ```
+
+### 权限问题
+
+如果遇到权限错误，请确保：
+- 脚本以 root 身份运行
+- `/opt/nginx` 目录权限正确
+- `/etc/systemd/system/nginx.service` 文件存在
+
+```bash
+# 检查目录权限
+ls -ld /opt/nginx
+ls -l /etc/systemd/system/nginx.service
+```
+
+### 常见错误
+
+| 错误 | 原因 | 解决方案 |
+|------|------|--------|
+| `permission denied` | 权限不足 | 使用 `sudo` 或以 root 身份运行 |
+| `Address already in use` | 端口被占用 | 检查其他进程或修改 Nginx 监听端口 |
+| `configuration file syntax error` | 配置文件错误 | 使用 `nginx -t` 验证配置 |
+
+## 📝 脚本功能说明
+
+安装脚本会自动完成以下操作：
+
+1. ✅ 检查 root 权限
+2. ✅ 清理旧的安装（如果存在）
+3. ✅ 下载预编译的 Nginx 包
+4. ✅ 解压并安装到 `/opt/nginx`
+5. ✅ 创建必要的目录和日志文件
+6. ✅ 生成默认配置文件
+7. ✅ 创建 systemd 服务文件
+8. ✅ 启用开机自启
+9. ✅ 启动服务并验证
+
+## 🔒 安全建议
+
+- 定期更新 Nginx 版本
+- 限制配置文件访问权限
+- 配置防火墙规则
+- 使用 SSL/TLS 加密传输
+- 定期备份配置文件
+
+## 📞 获取帮助
+
+如遇到问题，请：
+
+1. 检查脚本输出信息中错误提示
+2. 查看 Nginx 错误日志：`/opt/nginx/logs/error.log`
+3. 运行配置检查：`/usr/local/bin/nginx -t`
+4. 在项目 Issues 中提问
+
+## 📄 许可证
+
+本脚本遵循项目所采用的许可证。
+
 ---
 
-## 🔐 安全考量
+**最后更新：** 2026-06-24
 
-| 方面 | nginx_22.04_inside_20.04 | nginx_22.04_static_openssl |
-|------|-------------------------|--------------------------|
-| **OpenSSL 版本** | 系统版本（Ubuntu 20.04 = 1.1.1） | 3.0.12（最新稳定版） |
-| **TLS 1.3 支持** | ✅ (OpenSSL 1.1.1) | ✅ (OpenSSL 3.0) |
-| **现代加密算法** | 受限于 OpenSSL 1.1.1 | ✅ 完整支持 |
-| **安全补丁频率** | 取决于容器镜像更新 | 可手动更新 OpenSSL 版本 |
-
----
-
-## 🔧 故障排除
-
-### 兼容性问题
-- **运行时错误 `libc.so.6: version 'GLIBC_xxx' not found`**
-  → 使用 `nginx_22.04_inside_20.04`（确保 glibc 兼容性）
-
-- **SSL 相关错误**
-  → 检查目标系统 OpenSSL 版本：`openssl version`
-  → 使用 `nginx_22.04_static_openssl` 可避免依赖系统 OpenSSL
-
-### 编译问题
-- **Docker 不可用**
-  → 检查 Runner 上的 Docker 守护进程
-  → 验证构建脚本中的 Docker 命令语法
-
-- **网络超时**
-  → Nginx 源码和 OpenSSL 源码下载可能超时
-  → 考虑使用镜像源或本地缓存
-
----
-
-## 📝 维护建议
-
-1. **定期更新 Nginx 版本**
-   - 编辑工作流中的版本号
-   - 保持安全补丁和新功能同步
-
-2. **OpenSSL 更新策略**
-   - `nginx_22.04_inside_20.04`：自动跟随 Ubuntu 20.04 官方更新
-   - `nginx_22.04_static_openssl`：手动更新版本号以获取新补丁
-
-3. **兼容性测试**
-   - 在目标系统上测试二进制文件
-   - 验证 SSL/TLS 握手和性能
-
----
-
-## 🤝 许可证
-
-本项目中的构建脚本和工作流配置开源使用。Nginx 本身遵循 BSD-2-Clause 许可证。
-
----
-
-**最后更新**：2026-06-17
+**支持的系统：** Ubuntu, Debian, CentOS, Rocky Linux 等 Linux 发行版
