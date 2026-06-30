@@ -1,4 +1,4 @@
-name: nginx_22.04_static_openssl
+name: nginx_22.04_alpine
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
         sudo apt update
         sudo apt install -y build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev wget
 
-    - name: nginx_22.04_static_openssl
+    - name: nginx_22.04_alpine
       run: |
         wget https://www.openssl.org/source/openssl-3.0.12.tar.gz -O openssl.tar.gz
         tar -zxvf openssl.tar.gz
@@ -39,9 +39,11 @@ jobs:
           --with-http_ssl_module \
           --with-http_v2_module \
           --with-http_gzip_static_module \
-          --with-pcre \
+          --with-pcre=../pcre2-src \
           --with-openssl=../openssl-src \
-          --with-openssl-opt=no-shared
+          --with-openssl-opt=no-shared \
+          --with-cc-opt="-static -static-libgcc" \
+          --with-ld-opt="-static"
         make -j$(nproc)
 
     - name: Package build output
@@ -53,8 +55,8 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: nginx-1.25.3
-        name: "nginx_22.04_static_openssl"
+        tag_name: nginx-alpine-1.25.3
+        name: "nginx_22.04_alpine"
         body: "Auto-built Nginx from source with statically linked OpenSSL 3.0.12, HTTP/2, Gzip, and PCRE support."
         files: nginx-build.tar.gz
       env:
