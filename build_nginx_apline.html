@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Nginx 静态编译与 Supervisord 成功经验</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }
+    h1 { color: #2c3e50; }
+    h2 { color: #34495e; }
+    pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+    .success { color: green; font-weight: bold; }
+    .warn { color: orange; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>Nginx 静态编译与 Supervisord 成功经验</h1>
+
+  <h2>编译环境</h2>
+  <ul>
+    <li>基础环境：Ubuntu 22.04 (GitHub Actions Runner)</li>
+    <li>依赖：<code>build-essential</code>, <code>wget</code>, <code>tar</code>, <code>zlib1g-dev</code></li>
+    <li>静态库：OpenSSL 3.0.12, PCRE2 10.42</li>
+  </ul>
+
+  <h2>关键编译步骤</h2>
+  <pre>
+# 编译 OpenSSL 静态库
+./config no-shared && make -j$(nproc)
+
+# 编译 PCRE2 静态库
+./configure --disable-shared --enable-static && make -j$(nproc)
+
+# 编译 Nginx 静态二进制
+./configure --prefix=/opt/nginx \
+  --with-http_ssl_module \
+  --with-http_v2_module \
+  --with-http_gzip_static_module \
+  --with-pcre=../pcre2-src \
+  --with-openssl=../openssl-src \
+  --with-openssl-opt=no-shared \
+  --with-cc-opt="-static -static-libgcc" \
+  --with-ld-opt="-static"
+make -j$(nproc)
+  </pre>
+
+  <h2>验证结果</h2>
+  <pre>
+ldd /opt/nginx/sbin/nginx
+/lib/ld-musl-x86_64.so.1: /opt/nginx/sbin/nginx: Not a valid dynamic program
+  </pre>
+  <p class="success">说明已完全静态编译，无需依赖动态库。</p>
+
+  <h2>运行问题与解决</h2>
+  <ul>
+    <li class="warn">警告：<code>user appuser;</code> 指令在非 root 下无效 → 已删除。</li>
+    <li class="error">错误：缺少 <code>mime.types</code> 文件 → 已补齐到 <code>/opt/nginx/conf/mime.types</code>。</li>
+    <li>日志目录权限 → 使用 <code>chown -R appuser:appgroup /opt/nginx</code> 修复。</li>
+  </ul>
+
+  <h2>最终运行日志</h2>
+  <pre>
+2026-06-30 15:09:53,943 INFO success: cloudflared entered RUNNING state
+2026-06-30 15:09:53,943 INFO success: nginx entered RUNNING state
+2026-06-30 15:09:53,943 INFO success: singbox entered RUNNING state
+  </pre>
+  <p class="success">三个核心服务均已稳定运行。</p>
+
+  <h2>经验总结</h2>
+  <ol>
+    <li>必须静态编译 OpenSSL 与 PCRE2，避免 Alpine 缺库问题。</li>
+    <li>去掉 <code>user</code> 指令，避免非 root 下的警告。</li>
+    <li>确保 <code>mime.types</code> 文件存在，否则 nginx 无法启动。</li>
+    <li>日志与 PID 文件目录必须赋权给运行用户。</li>
+    <li>supervisord 配置中使用 <code>daemon off;</code> 保证前台运行。</li>
+  </ol>
+</body>
+</html>
