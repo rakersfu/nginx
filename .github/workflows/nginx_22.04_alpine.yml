@@ -2,8 +2,8 @@ name: nginx_22.04_alpine
 
 on:
   workflow_dispatch:
-  #push:                       #取消注释每次修改代码后会自动运行
-    #branches: [ main ]
+  #push:
+  #  branches: [ main ]
 
 jobs:
   build-nginx:
@@ -16,9 +16,11 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev wget
+        sudo apt install -y build-essential wget tar make gcc g++ \
+          zlib1g zlib1g-dev
 
-    - name: nginx_22.04_alpine
+    # 编译 OpenSSL 静态库
+    - name: Build OpenSSL static
       run: |
         wget https://www.openssl.org/source/openssl-3.0.12.tar.gz -O openssl.tar.gz
         tar -zxvf openssl.tar.gz
@@ -27,12 +29,24 @@ jobs:
         ./config no-shared
         make -j$(nproc)
 
+    # 编译 PCRE2 静态库
+    - name: Build PCRE2 static
+      run: |
+        wget https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.42/pcre2-10.42.tar.gz -O pcre2.tar.gz
+        tar -zxvf pcre2.tar.gz
+        mv pcre2-10.42 pcre2-src
+        cd pcre2-src
+        ./configure --disable-shared --enable-static
+        make -j$(nproc)
+
+    # 下载 Nginx 源码
     - name: Download Nginx source
       run: |
         wget http://nginx.org/download/nginx-1.25.3.tar.gz -O nginx.tar.gz
         tar -zxvf nginx.tar.gz
 
-    - name: Configure and build Nginx (with static OpenSSL)
+    # 编译 Nginx，静态链接 OpenSSL + PCRE2
+    - name: Configure and build Nginx (static OpenSSL + PCRE2)
       working-directory: ./nginx-1.25.3
       run: |
         ./configure --prefix=/opt/nginx \
@@ -46,18 +60,20 @@ jobs:
           --with-ld-opt="-static"
         make -j$(nproc)
 
+    # 打包构建结果
     - name: Package build output
       run: |
         mkdir -p output
         cp -r nginx-1.25.3/objs output/nginx
         tar -czvf nginx-build.tar.gz output
 
+    # 发布 Release
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: nginx-alpine-1.25.3
         name: "nginx_22.04_alpine"
-        body: "Auto-built Nginx from source with statically linked OpenSSL 3.0.12, HTTP/2, Gzip, and PCRE support."
+        body: "Auto-built Nginx from source with statically linked OpenSSL 3.0.12 and PCRE2 10.42, HTTP/2, Gzip support."
         files: nginx-build.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
