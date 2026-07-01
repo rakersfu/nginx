@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Nginx 服务启动流程</title>
+    <style>
+        body { font-family: Consolas, monospace; background: #f4f4f4; padding: 20px; }
+        h1 { color: #2c3e50; }
+        pre { background: #272822; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        .success { color: #27ae60; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Nginx 服务启动流程记录</h1>
+
+    <h2>1️⃣ 创建服务文件</h2>
+    <pre>
+nano /etc/systemd/system/nginx.service
+
+[Unit]
+Description=Nginx Web Server
+After=network.target
+
+[Service]
+Type=forking
+PIDFile=/opt/nginx/logs/nginx.pid
+ExecStart=/usr/local/bin/nginx -c /opt/nginx/conf/nginx.conf -p /opt/nginx
+ExecReload=/usr/local/bin/nginx -s reload
+ExecStop=/usr/local/bin/nginx -s quit
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+    </pre>
+
+    <h2>2️⃣ 启用并启动服务</h2>
+    <pre>
+sudo systemctl daemon-reexec
+sudo systemctl enable nginx
+sudo systemctl start nginx
+    </pre>
+
+    <h2>3️⃣ 查看服务状态</h2>
+    <pre>
+sudo systemctl status nginx
+
+● nginx.service - Nginx Web Server
+     Loaded: loaded (/etc/systemd/system/nginx.service; enabled; vendor preset: enabled)
+     Active: <span class="success">active (running)</span> since Wed 2026-07-01 06:12:22 UTC
+   Main PID: 1937738 (nginx)
+      Tasks: 3
+     Memory: 10.2M
+        CPU: 25ms
+    </pre>
+
+    <p class="success">✅ Nginx 已成功启动并运行！</p>
+</body>
+</html>
