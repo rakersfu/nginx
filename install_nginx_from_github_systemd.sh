@@ -117,32 +117,47 @@ NGINX_USER=${NGINX_USER:-www-data}
 
 echo "[nginx-install] Creating default nginx.conf..."
 cat > "$CONF_DIR/nginx.conf" <<EOF
-user $NGINX_USER;
-
-worker_processes  1;
+#user www-data;
+worker_processes auto;
+pid /opt/nginx/logs/nginx.pid;
+error_log /opt/nginx/logs/error.log warn;
 
 events {
-    worker_connections  1024;
+    worker_connections 1024;
+    multi_accept on;
 }
 
 http {
-    include       mime.types;
-    default_type  application/octet-stream;
+    include /opt/nginx/conf/mime.types;
+    default_type application/octet-stream;
 
-    access_log  logs/access.log;
-    error_log   logs/error.log;
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
 
-    sendfile        on;
-    keepalive_timeout  65;
+    access_log /opt/nginx/logs/access.log main;
+
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 65;
+    server_tokens off;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript;
 
     server {
-        listen       80;
-        server_name  localhost;
+        listen 80;
+        server_name localhost;
+
+        root /opt/navpage;
+        index index.html index.htm;
 
         location / {
-            root   html;
-            index  index.html index.htm;
+            try_files $uri $uri/ /index.html;
         }
+
+        error_page 404 /404.html;
+        error_page 500 502 503 504 /50x.html;
     }
 }
 EOF
@@ -174,10 +189,11 @@ Description=Nginx Web Server
 After=network.target
 
 [Service]
-Type=simple
-ExecStart=/usr/local/bin/nginx -c /opt/nginx/conf/nginx.conf -p /opt/nginx -g "daemon off;"
-ExecReload=/usr/local/bin/nginx -s reload -p /opt/nginx
-ExecStop=/usr/local/bin/nginx -s quit -p /opt/nginx
+Type=forking
+PIDFile=/opt/nginx/logs/nginx.pid
+ExecStart=/usr/local/bin/nginx -c /opt/nginx/conf/nginx.conf -p /opt/nginx
+ExecReload=/usr/local/bin/nginx -s reload
+ExecStop=/usr/local/bin/nginx -s quit
 Restart=always
 
 [Install]
