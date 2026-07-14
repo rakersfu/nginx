@@ -31,13 +31,13 @@ jobs:
         tar -xzf zlib.tar.gz
         mv zlib-* zlib-src
 
-        echo "=== Build OpenSSL (static) ==="
+        echo "=== Build OpenSSL (static, no apps) ==="
         wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
         tar -xzf openssl-3.0.12.tar.gz
         mv openssl-3.0.12 openssl-src
         cd openssl-src
-        ./Configure linux-aarch64 no-shared
-        make -j$(nproc)
+        ./Configure linux-aarch64 no-shared no-apps
+        make -j1
         cd ..
 
         echo "=== Build PCRE2 (static) ==="
@@ -77,7 +77,7 @@ jobs:
       with:
         tag_name: nginx-arm-static
         name: "nginx ARM Static Build"
-        body: "ARM static Nginx with OpenSSL 3.0.12 + PCRE2 10.42 + zlib"
+        body: "ARM static Nginx with OpenSSL 3.0.12 (no-apps) + PCRE2 10.42 + zlib"
         files: nginx
       env:
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
