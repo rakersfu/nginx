@@ -15,6 +15,11 @@ jobs:
       run: |
         docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
+    - name: Setup Docker buildx
+      run: |
+        docker buildx create --use
+        docker buildx inspect --bootstrap
+
     - name: Build inside ARM container
       run: |
         cat << 'EOF' > build.sh
@@ -56,7 +61,7 @@ jobs:
         cp objs/nginx /src/nginx
         EOF
 
-        docker run --rm -v $PWD:/src -w /src arm64v8/alpine:3.19 sh build.sh
+        docker run --rm -v $PWD:/src -w /src --platform=linux/arm64 arm64v8/alpine:3.19 sh build.sh
 
     - name: Upload nginx binary
       uses: softprops/action-gh-release@v1
