@@ -14,8 +14,12 @@ jobs:
     - name: Install cross-compile toolchain + QEMU
       run: |
         sudo apt update
-        sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-          qemu-user-static build-essential wget tar make
+        sudo apt install -y \
+          gcc-aarch64-linux-gnu \
+          g++-aarch64-linux-gnu \
+          binutils-aarch64-linux-gnu \
+          qemu-user-static \
+          build-essential wget tar make
 
     # Build OpenSSL (ARM)
     - name: Build OpenSSL static (ARM)
