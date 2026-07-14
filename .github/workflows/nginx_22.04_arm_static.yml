@@ -55,13 +55,14 @@ jobs:
       working-directory: ./nginx-1.25.3
       run: |
         ./configure --prefix=/opt/nginx \
+          --with-cc=aarch64-linux-gnu-gcc \
+          --host=arm-linux-gnu \
           --with-http_ssl_module \
           --with-http_v2_module \
           --with-http_gzip_static_module \
           --with-pcre=../pcre2-src \
           --with-openssl=../openssl-src \
           --with-openssl-opt=no-shared \
-          --with-cc=aarch64-linux-gnu-gcc \
           --with-ld-opt="-static" \
           --with-cc-opt="-static -static-libgcc"
         make -j$(nproc)
