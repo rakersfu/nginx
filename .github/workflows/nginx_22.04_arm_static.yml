@@ -11,7 +11,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Install cross-compile toolchain + QEMU
+    - name: Install ARM cross toolchain
       run: |
         sudo apt update
         sudo apt install -y \
@@ -20,6 +20,12 @@ jobs:
           binutils-aarch64-linux-gnu \
           qemu-user-static \
           build-essential wget tar make
+
+    - name: Verify toolchain
+      run: |
+        which aarch64-linux-gnu-gcc
+        aarch64-linux-gnu-gcc -v
+        which aarch64-linux-gnu-ld
 
     # Build OpenSSL (ARM)
     - name: Build OpenSSL static (ARM)
@@ -54,9 +60,12 @@ jobs:
     - name: Configure and build Nginx (ARM static)
       working-directory: ./nginx-1.25.3
       run: |
+        export CC=aarch64-linux-gnu-gcc
+        export LD=aarch64-linux-gnu-ld
+        export AR=aarch64-linux-gnu-ar
+        export RANLIB=aarch64-linux-gnu-ranlib
+
         ./configure --prefix=/opt/nginx \
-          --with-cc=aarch64-linux-gnu-gcc \
-          --host=arm-linux-gnu \
           --with-http_ssl_module \
           --with-http_v2_module \
           --with-http_gzip_static_module \
@@ -65,6 +74,7 @@ jobs:
           --with-openssl-opt=no-shared \
           --with-ld-opt="-static" \
           --with-cc-opt="-static -static-libgcc"
+
         make -j$(nproc)
 
     # Upload nginx binary directly
