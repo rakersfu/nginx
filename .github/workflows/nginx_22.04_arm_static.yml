@@ -1,0 +1,78 @@
+name: nginx_22.04_arm_static
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-nginx-arm:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install cross-compile toolchain + QEMU
+      run: |
+        sudo apt update
+        sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+          qemu-user-static build-essential wget tar make
+
+    # 编译 OpenSSL (ARM)
+    - name: Build OpenSSL static (ARM)
+      run: |
+        wget https://www.openssl.org/source/openssl-3.0.12.tar.gz -O openssl.tar.gz
+        tar -zxvf openssl.tar.gz
+        mv openssl-3.0.12 openssl-src
+        cd openssl-src
+        CC=aarch64-linux-gnu-gcc ./Configure linux-aarch64 no-shared
+        make -j$(nproc)
+
+    # 编译 PCRE2 (ARM)
+    - name: Build PCRE2 static (ARM)
+      run: |
+        wget https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.42/pcre2-10.42.tar.gz -O pcre2.tar.gz
+        tar -zxvf pcre2.tar.gz
+        mv pcre2-10.42 pcre2-src
+        cd pcre2-src
+        CC=aarch64-linux-gnu-gcc ./configure --disable-shared --enable-static
+        make -j$(nproc)
+
+    # 下载 Nginx 源码
+    - name: Download Nginx source
+      run: |
+        wget http://nginx.org/download/nginx-1.25.3.tar.gz -O nginx.tar.gz
+        tar -zxvf nginx.tar.gz
+
+    # 编译 Nginx (ARM)
+    - name: Configure and build Nginx (ARM static)
+      working-directory: ./nginx-1.25.3
+      run: |
+        ./configure --prefix=/opt/nginx \
+          --with-http_ssl_module \
+          --with-http_v2_module \
+          --with-http_gzip_static_module \
+          --with-pcre=../pcre2-src \
+          --with-openssl=../openssl-src \
+          --with-openssl-opt=no-shared \
+          --with-cc=aarch64-linux-gnu-gcc \
+          --with-ld-opt="-static" \
+          --with-cc-opt="-static -static-libgcc"
+        make -j$(nproc)
+
+    # 打包构建结果
+    - name: Package build output
+      run: |
+        mkdir -p output
+        cp -r nginx-1.25.3/objs output/nginx
+        tar -czvf nginx-arm-build.tar.gz output
+
+    # 发布 Release
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: nginx-arm-1.25.3
+        name: "nginx_22.04_arm_static"
+        body: "Auto-built ARM Nginx with static OpenSSL 3.0.12 + PCRE2 10.42"
+        files: nginx-arm-build.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
