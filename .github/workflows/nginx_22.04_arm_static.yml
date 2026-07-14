@@ -23,7 +23,7 @@ jobs:
     - name: Build inside ARM container
       run: |
         cat << 'EOF' > build.sh
-        apk add build-base wget tar
+        apk add build-base wget tar zlib-dev
 
         # OpenSSL
         wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
