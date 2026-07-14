@@ -24,7 +24,7 @@ jobs:
       run: |
         cat << 'EOF' > build.sh
         set -e
-        apk add build-base wget tar
+        apk add build-base wget tar perl
 
         echo "=== Build zlib (static) ==="
         wget https://zlib.net/current/zlib.tar.gz
