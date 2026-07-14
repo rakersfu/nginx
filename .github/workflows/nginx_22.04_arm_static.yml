@@ -21,6 +21,10 @@ jobs:
           qemu-user-static \
           build-essential wget tar make
 
+    - name: Enable QEMU binfmt for ARM
+      run: |
+        sudo update-binfmts --enable qemu-aarch64
+
     - name: Verify toolchain
       run: |
         which aarch64-linux-gnu-gcc
