@@ -11,15 +11,20 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Install dependencies (ARM cross toolchain)
+    - name: Install dependencies
       run: |
         sudo apt update
         sudo apt install -y build-essential wget tar make \
           gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-          binutils-aarch64-linux-gnu zlib1g zlib1g-dev
+          binutils-aarch64-linux-gnu zlib1g zlib1g-dev \
+          qemu-user-static
+
+    - name: Enable ARM execution (QEMU binfmt)
+      run: |
+        sudo update-binfmts --enable qemu-aarch64
 
     # Build OpenSSL static (ARM)
-    - name: Build OpenSSL static (ARM)
+    - name: Build OpenSSL static
       run: |
         wget https://www.openssl.org/source/openssl-3.0.12.tar.gz -O openssl.tar.gz
         tar -zxvf openssl.tar.gz
@@ -29,7 +34,7 @@ jobs:
         make -j$(nproc)
 
     # Build PCRE2 static (ARM)
-    - name: Build PCRE2 static (ARM)
+    - name: Build PCRE2 static
       run: |
         wget https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.42/pcre2-10.42.tar.gz -O pcre2.tar.gz
         tar -zxvf pcre2.tar.gz
@@ -45,7 +50,7 @@ jobs:
         tar -zxvf nginx.tar.gz
 
     # Build Nginx static (ARM)
-    - name: Configure and build Nginx (ARM static)
+    - name: Configure and build Nginx
       working-directory: ./nginx-1.25.3
       run: |
         export CC=aarch64-linux-gnu-gcc
@@ -65,20 +70,18 @@ jobs:
 
         make -j$(nproc)
 
-    # Package build output
     - name: Package build output
       run: |
         mkdir -p output
         cp -r nginx-1.25.3/objs output/nginx
         tar -czvf nginx-build.tar.gz output
 
-    # Release
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: nginx-arm-1.25.3
         name: "nginx_22.04_alpine_arm"
-        body: "ARM static Nginx with OpenSSL 3.0.12 and PCRE2 10.42"
+        body: "ARM static Nginx build"
         files: nginx-build.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
