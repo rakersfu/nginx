@@ -1,4 +1,4 @@
-name: nginx_arm_docker_build
+name: nginx_arm_static_build
 
 on:
   workflow_dispatch:
@@ -11,11 +11,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Enable QEMU for Docker
+    - name: Enable QEMU for Docker (ARM emulation)
       run: |
         docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
-    - name: Setup Docker buildx
+    - name: Setup Docker buildx (ARM image support)
       run: |
         docker buildx create --use
         docker buildx inspect --bootstrap
@@ -23,14 +23,15 @@ jobs:
     - name: Build inside ARM container
       run: |
         cat << 'EOF' > build.sh
+        set -e
         apk add build-base wget tar
 
-        # Zlib (static)
-        wget https://zlib.net/zlib-1.3.1.tar.gz
-        tar -xzf zlib-1.3.1.tar.gz
-        mv zlib-1.3.1 zlib-src
+        echo "=== Build zlib (static) ==="
+        wget https://zlib.net/current/zlib.tar.gz
+        tar -xzf zlib.tar.gz
+        mv zlib-* zlib-src
 
-        # OpenSSL
+        echo "=== Build OpenSSL (static) ==="
         wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
         tar -xzf openssl-3.0.12.tar.gz
         mv openssl-3.0.12 openssl-src
@@ -39,7 +40,7 @@ jobs:
         make -j$(nproc)
         cd ..
 
-        # PCRE2
+        echo "=== Build PCRE2 (static) ==="
         wget https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.42/pcre2-10.42.tar.gz
         tar -xzf pcre2-10.42.tar.gz
         mv pcre2-10.42 pcre2-src
@@ -48,7 +49,7 @@ jobs:
         make -j$(nproc)
         cd ..
 
-        # Nginx
+        echo "=== Build Nginx (static ARM) ==="
         wget http://nginx.org/download/nginx-1.25.3.tar.gz
         tar -xzf nginx-1.25.3.tar.gz
         cd nginx-1.25.3
@@ -74,8 +75,9 @@ jobs:
     - name: Upload nginx binary
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: nginx-arm-docker
-        name: "nginx ARM Docker Build"
+        tag_name: nginx-arm-static
+        name: "nginx ARM Static Build"
+        body: "ARM static Nginx with OpenSSL 3.0.12 + PCRE2 10.42 + zlib"
         files: nginx
       env:
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
