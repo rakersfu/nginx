@@ -1,83 +1,84 @@
-name: nginx_arm_static_build
+name: nginx_22.04_alpine_arm
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-nginx:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout
+    - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Enable QEMU for Docker (ARM emulation)
+    - name: Install dependencies (ARM cross toolchain)
       run: |
-        docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+        sudo apt update
+        sudo apt install -y build-essential wget tar make \
+          gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+          binutils-aarch64-linux-gnu zlib1g zlib1g-dev
 
-    - name: Setup Docker buildx (ARM image support)
+    # Build OpenSSL static (ARM)
+    - name: Build OpenSSL static (ARM)
       run: |
-        docker buildx create --use
-        docker buildx inspect --bootstrap
-
-    - name: Build inside ARM container
-      run: |
-        cat << 'EOF' > build.sh
-        set -e
-        apk add build-base wget tar perl
-
-        echo "=== Build zlib (static) ==="
-        wget https://zlib.net/current/zlib.tar.gz
-        tar -xzf zlib.tar.gz
-        mv zlib-* zlib-src
-
-        echo "=== Build OpenSSL (static, no apps) ==="
-        wget https://www.openssl.org/source/openssl-3.0.12.tar.gz
-        tar -xzf openssl-3.0.12.tar.gz
+        wget https://www.openssl.org/source/openssl-3.0.12.tar.gz -O openssl.tar.gz
+        tar -zxvf openssl.tar.gz
         mv openssl-3.0.12 openssl-src
         cd openssl-src
-        ./Configure linux-aarch64 no-shared no-apps
-        make -j1
-        cd ..
+        CC=aarch64-linux-gnu-gcc ./Configure linux-aarch64 no-shared
+        make -j$(nproc)
 
-        echo "=== Build PCRE2 (static) ==="
-        wget https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.42/pcre2-10.42.tar.gz
-        tar -xzf pcre2-10.42.tar.gz
+    # Build PCRE2 static (ARM)
+    - name: Build PCRE2 static (ARM)
+      run: |
+        wget https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.42/pcre2-10.42.tar.gz -O pcre2.tar.gz
+        tar -zxvf pcre2.tar.gz
         mv pcre2-10.42 pcre2-src
         cd pcre2-src
-        ./configure --disable-shared --enable-static
+        CC=aarch64-linux-gnu-gcc ./configure --host=aarch64-linux-gnu --disable-shared --enable-static
         make -j$(nproc)
-        cd ..
 
-        echo "=== Build Nginx (static ARM) ==="
-        wget http://nginx.org/download/nginx-1.25.3.tar.gz
-        tar -xzf nginx-1.25.3.tar.gz
-        cd nginx-1.25.3
+    # Download Nginx source
+    - name: Download Nginx source
+      run: |
+        wget http://nginx.org/download/nginx-1.25.3.tar.gz -O nginx.tar.gz
+        tar -zxvf nginx.tar.gz
 
-        ./configure \
-          --prefix=/opt/nginx \
+    # Build Nginx static (ARM)
+    - name: Configure and build Nginx (ARM static)
+      working-directory: ./nginx-1.25.3
+      run: |
+        export CC=aarch64-linux-gnu-gcc
+        export LD=aarch64-linux-gnu-ld
+        export AR=aarch64-linux-gnu-ar
+        export RANLIB=aarch64-linux-gnu-ranlib
+
+        ./configure --prefix=/opt/nginx \
           --with-http_ssl_module \
           --with-http_v2_module \
           --with-http_gzip_static_module \
           --with-pcre=../pcre2-src \
           --with-openssl=../openssl-src \
-          --with-zlib=../zlib-src \
           --with-openssl-opt=no-shared \
-          --with-ld-opt="-static" \
-          --with-cc-opt="-static -static-libgcc"
+          --with-cc-opt="-static -static-libgcc" \
+          --with-ld-opt="-static"
 
         make -j$(nproc)
-        cp objs/nginx /src/nginx
-        EOF
 
-        docker run --rm -v $PWD:/src -w /src --platform=linux/arm64 arm64v8/alpine:3.19 sh build.sh
+    # Package build output
+    - name: Package build output
+      run: |
+        mkdir -p output
+        cp -r nginx-1.25.3/objs output/nginx
+        tar -czvf nginx-build.tar.gz output
 
-    - name: Upload nginx binary
+    # Release
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: nginx-arm-static
-        name: "nginx ARM Static Build"
-        body: "ARM static Nginx with OpenSSL 3.0.12 (no-apps) + PCRE2 10.42 + zlib"
-        files: nginx
+        tag_name: nginx-arm-1.25.3
+        name: "nginx_22.04_alpine_arm"
+        body: "ARM static Nginx with OpenSSL 3.0.12 and PCRE2 10.42"
+        files: nginx-build.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
