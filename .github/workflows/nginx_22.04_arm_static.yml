@@ -34,7 +34,10 @@ jobs:
         tar -zxvf pcre2.tar.gz
         mv pcre2-10.42 pcre2-src
         cd pcre2-src
-        CC=aarch64-linux-gnu-gcc ./configure --disable-shared --enable-static
+        CC=aarch64-linux-gnu-gcc ./configure \
+          --host=aarch64-linux-gnu \
+          --disable-shared \
+          --enable-static
         make -j$(nproc)
 
     # Download Nginx
