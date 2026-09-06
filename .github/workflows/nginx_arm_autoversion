@@ -1,0 +1,100 @@
+name: build_nginx_arm_static
+
+on:
+  workflow_dispatch:
+    inputs:
+      nginx_version:
+        description: "Nginx version to build (e.g. 1.25.3)"
+        required: true
+        default: "1.25.3"
+      openssl_version:
+        description: "OpenSSL version (e.g. 3.0.12)"
+        required: true
+        default: "3.0.12"
+      pcre2_version:
+        description: "PCRE2 version (e.g. 10.42)"
+        required: true
+        default: "10.42"
+
+jobs:
+  build-nginx:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential wget tar make \
+          gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+          binutils-aarch64-linux-gnu zlib1g zlib1g-dev \
+          qemu-user-static
+
+    - name: Enable ARM execution (QEMU binfmt)
+      run: |
+        sudo update-binfmts --enable qemu-aarch64
+
+    # Build OpenSSL static (ARM)
+    - name: Build OpenSSL static
+      run: |
+        wget https://www.openssl.org/source/openssl-${{ github.event.inputs.openssl_version }}.tar.gz -O openssl.tar.gz
+        tar -zxvf openssl.tar.gz
+        mv openssl-${{ github.event.inputs.openssl_version }} openssl-src
+        cd openssl-src
+        CC=aarch64-linux-gnu-gcc ./Configure linux-aarch64 no-shared
+        make -j$(nproc)
+
+    # Build PCRE2 static (ARM)
+    - name: Build PCRE2 static
+      run: |
+        wget https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${{ github.event.inputs.pcre2_version }}/pcre2-${{ github.event.inputs.pcre2_version }}.tar.gz -O pcre2.tar.gz
+        tar -zxvf pcre2.tar.gz
+        mv pcre2-${{ github.event.inputs.pcre2_version }} pcre2-src
+        cd pcre2-src
+        CC=aarch64-linux-gnu-gcc ./configure --host=aarch64-linux-gnu --disable-shared --enable-static
+        make -j$(nproc)
+
+    # Download Nginx source
+    - name: Download Nginx source
+      run: |
+        wget http://nginx.org/download/nginx-${{ github.event.inputs.nginx_version }}.tar.gz -O nginx.tar.gz
+        tar -zxvf nginx.tar.gz
+
+    # Build Nginx static (ARM)
+    - name: Configure and build Nginx
+      working-directory: ./nginx-${{ github.event.inputs.nginx_version }}
+      run: |
+        export CC=aarch64-linux-gnu-gcc
+        export LD=aarch64-linux-gnu-ld
+        export AR=aarch64-linux-gnu-ar
+        export RANLIB=aarch64-linux-gnu-ranlib
+
+        ./configure --prefix=/opt/nginx \
+          --with-http_ssl_module \
+          --with-http_v2_module \
+          --with-http_gzip_static_module \
+          --with-pcre=../pcre2-src \
+          --with-openssl=../openssl-src \
+          --with-openssl-opt=no-shared \
+          --with-cc-opt="-static -static-libgcc" \
+          --with-ld-opt="-static"
+
+        make -j$(nproc)
+
+    - name: Package build output
+      run: |
+        mkdir -p output
+        cp -r nginx-${{ github.event.inputs.nginx_version }}/objs output/nginx
+        tar -czvf nginx-${{ github.event.inputs.nginx_version }}-arm64-static.tar.gz output
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: nginx-arm-${{ github.event.inputs.nginx_version }}
+        name: "nginx_arm_static_${{ github.event.inputs.nginx_version }}"
+        body: "ARM64 static Nginx build"
+        files: nginx-${{ github.event.inputs.nginx_version }}-arm64-static.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
