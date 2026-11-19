@@ -1,7 +1,7 @@
 name: nginx_22.04_alpine_nozip
 
 env:
-  NGINX_VERSION: "1.25.3"
+  NGINX_VERSION: "1.30.7"
 
 on:
   workflow_dispatch:
