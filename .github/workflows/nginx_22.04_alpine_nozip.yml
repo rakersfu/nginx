@@ -67,9 +67,8 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: nginx-alpine-${{ env.NGINX_VERSION }}
-        name: "nginx_22.04_alpine_${{ env.NGINX_VERSION }}"
+        tag_name: nginx-alpine_nozip-${{ env.NGINX_VERSION }}
+        name: "nginx_22.04_alpine_nozip"
         body: "Auto-built Nginx from source with statically linked OpenSSL 3.0.12 and PCRE2 10.42, HTTP/2, Gzip support."
         files: ./nginx-${{ env.NGINX_VERSION }}/objs/nginx
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        token: ${{ secrets.GH_TOKEN }}
