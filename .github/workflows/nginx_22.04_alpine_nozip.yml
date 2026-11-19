@@ -1,5 +1,8 @@
 name: nginx_22.04_alpine_nozip
 
+env:
+  NGINX_VERSION: "1.25.3"
+
 on:
   workflow_dispatch:
   #push:
@@ -42,12 +45,12 @@ jobs:
     # 下载 Nginx 源码
     - name: Download Nginx source
       run: |
-        wget http://nginx.org/download/nginx-1.25.3.tar.gz -O nginx.tar.gz
+        wget "http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" -O nginx.tar.gz
         tar -zxvf nginx.tar.gz
 
     # 编译 Nginx，静态链接 OpenSSL + PCRE2
     - name: Configure and build Nginx (static OpenSSL + PCRE2)
-      working-directory: ./nginx-1.25.3
+      working-directory: ./nginx-${{ env.NGINX_VERSION }}
       run: |
         ./configure --prefix=/opt/nginx \
           --with-http_ssl_module \
@@ -64,9 +67,9 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: nginx-alpine_nozip-1.25.3
+        tag_name: nginx-alpine-${{ env.NGINX_VERSION }}
         name: "nginx_22.04_alpine_nozip"
         body: "Auto-built Nginx from source with statically linked OpenSSL 3.0.12 and PCRE2 10.42, HTTP/2, Gzip support."
-        files: ./nginx-1.25.3/objs/nginx
+        files: ./nginx-${{ env.NGINX_VERSION }}/objs/nginx
       env:
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
