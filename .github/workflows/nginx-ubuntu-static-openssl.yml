@@ -7,7 +7,7 @@ on:
 
 env:
   NGINX_VERSION: "1.30.7"
-  OPENSSL_VERSION: "3.0.12"
+  OPENSSL_VERSION: "4.1.0"
 
 jobs:
   build-nginx:
@@ -76,7 +76,7 @@ jobs:
         tag_name: nginx-ubuntu-${{ env.NGINX_VERSION }}
         name: "nginx-ubuntu-${{ env.NGINX_VERSION }}"
         body: |
-          Nginx ${{ env.NGINX_VERSION }} with statically linked OpenSSL 3.0.12.
+          Nginx ${{ env.NGINX_VERSION }} with statically linked OpenSSL ${{ env.OPENSSL_VERSION }}.
           Built on Ubuntu 22.04. Uses system PCRE and glibc.
           
           **Deployment:**
