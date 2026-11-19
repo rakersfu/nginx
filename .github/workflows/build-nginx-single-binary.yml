@@ -1,4 +1,4 @@
-name: build-nginx-static-openssl
+name: nginx-ubuntu-static-openssl
 
 on:
   workflow_dispatch:
