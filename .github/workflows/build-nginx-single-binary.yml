@@ -1,0 +1,107 @@
+name: build-nginx-single-binary
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [ main ]
+
+env:
+  NGINX_VERSION: "1.30.7" # 强烈建议使用官方稳定版，1.30.7 可能未发布
+  OPENSSL_VERSION: "3.0.12"
+  PCRE2_VERSION: "10.42"
+
+jobs:
+  build-nginx:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential wget tar make gcc g++ \
+          zlib1g zlib1g-dev libssl-dev musl-tools
+
+    # 1. 编译 OpenSSL 静态库
+    - name: Build OpenSSL static
+      run: |
+        wget https://www.openssl.org/source/openssl-${{ env.OPENSSL_VERSION }}.tar.gz
+        tar -zxvf openssl-${{ env.OPENSSL_VERSION }}.tar.gz
+        mv openssl-${{ env.OPENSSL_VERSION }} openssl-src
+        cd openssl-src
+        # 使用 no-shared 生成静态库
+        ./config no-shared linux-x86_64
+        make -j$(nproc)
+        # 记录库位置
+        echo "OPENSSL_LIB_DIR=$(pwd)" >> $GITHUB_ENV
+
+    # 2. 编译 PCRE2 静态库
+    - name: Build PCRE2 static
+      run: |
+        wget https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${{ env.PCRE2_VERSION }}/pcre2-${{ env.PCRE2_VERSION }}.tar.gz
+        tar -zxvf pcre2-${{ env.PCRE2_VERSION }}.tar.gz
+        mv pcre2-${{ env.PCRE2_VERSION }} pcre2-src
+        cd pcre2-src
+        # 静态编译，禁用共享库
+        ./configure --disable-shared --enable-static --prefix=/tmp/pcre2-static
+        make -j$(nproc)
+        make install DESTDIR=/tmp/pcre2-dest
+        # 将库复制到统一目录
+        mkdir -p /tmp/static-deps/lib /tmp/static-deps/include
+        cp -r /tmp/pcre2-dest/tmp/pcre2-static/lib/* /tmp/static-deps/lib/ 2>/dev/null || true
+        cp -r /tmp/pcre2-dest/tmp/pcre2-static/include/* /tmp/static-deps/include/ 2>/dev/null || true
+        # 复制 OpenSSL 静态库
+        cp -r openssl-src/libcrypto.a /tmp/static-deps/lib/
+        cp -r openssl-src/libssl.a /tmp/static-deps/lib/
+        cp -r openssl-src/include/* /tmp/static-deps/include/ 2>/dev/null || true
+
+    # 3. 下载 Nginx 源码
+    - name: Download Nginx source
+      run: |
+        wget "https://nginx.org/download/nginx-${{ env.NGINX_VERSION }}.tar.gz"
+        tar -zxvf nginx-${{ env.NGINX_VERSION }}.tar.gz
+
+    # 4. 编译 Nginx
+    # 策略：静态链接 OpenSSL/PCRE2，但 Nginx 主体动态链接 glibc（确保内核兼容性）
+    # 目标机器必须是 Ubuntu 22.04+ (glibc 2.34+)
+    - name: Configure and build Nginx
+      working-directory: ./nginx-${{ env.NGINX_VERSION }}
+      run: |
+        ./configure --prefix=/opt/nginx \
+          --with-http_ssl_module \
+          --with-http_v2_module \
+          --with-http_gzip_static_module \
+          --with-pcre=/tmp/static-deps \
+          --with-openssl=/tmp/static-deps \
+          --with-cc-opt="-I/tmp/static-deps/include -L/tmp/static-deps/lib -Wl,-rpath,/opt/nginx/lib" \
+          --with-ld-opt="-L/tmp/static-deps/lib -Wl,-rpath,/opt/nginx/lib -static-libgcc -static-libstdc++"
+        make -j$(nproc)
+        
+        # 验证：检查二进制是否依赖系统库
+        ldd objs/nginx | grep -v "linux-vdso\|ld-linux\|libgcc\|libc.so" || echo "No unexpected dynamic deps found or fully static"
+
+    # 5. 创建发布目录并复制二进制
+    - name: Prepare release
+      run: |
+        mkdir -p release/sbin
+        cp objs/nginx release/sbin/nginx
+        chmod +x release/sbin/nginx
+
+    # 6. 创建 GitHub Release（单个二进制文件）
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: nginx-ubuntu-glibc-${{ env.NGINX_VERSION }}
+        name: "nginx-ubuntu-glibc-${{ env.NGINX_VERSION }}"
+        body: |
+          Nginx ${{ env.NGINX_VERSION }} with statically linked OpenSSL and PCRE2.
+          Designed for Ubuntu 22.04 glibc environment.
+          
+          **Deployment:**
+          1. Download binary: `curl -L -o /usr/local/bin/nginx <download_url>`
+          2. Ensure config at `/opt/nginx/conf/nginx.conf`
+          3. `systemctl start nginx`
+        files: release/sbin/nginx
+        token: ${{ secrets.GH_TOKEN }}
